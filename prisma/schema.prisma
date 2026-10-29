@@ -1,0 +1,175 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  VOUCHER
+  ADMIN
+}
+
+enum LoanStatus {
+  ACTIVE
+  REPAID
+  PENDING
+  DEFAULTED
+}
+
+enum TransactionStatus {
+  COMPLETED
+  PENDING
+  FAILED
+}
+
+enum TransactionType {
+  LOAN_REPAYMENT
+  USDC_TRANSFER
+  YIELD_DEPOSIT
+  CRYPTO_SWAP
+  LOAN_ORIGINATION
+  CIRCLE_CONTRIBUTION
+  FIAT_DEPOSIT
+}
+
+model User {
+  id              String               @id @default(uuid())
+  email           String?              @unique
+  username        String?              @unique
+  ensName         String?
+  avatarUrl       String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  wallets         Wallet[]
+  transactions    Transaction[]
+  assets          Asset[]
+  trustScore      TrustScore?
+  circleMembers   TrustCircleMember[]
+  loans           Loan[]
+  repayments      LoanRepayment[]
+}
+
+model Wallet {
+  id              String        @id @default(uuid())
+  address         String        @unique
+  network         String        @default("Ethereum")
+  isPrimary       Boolean       @default(true)
+  lastConnectedAt DateTime      @default(now())
+  
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id              String        @id @default(uuid())
+  symbol          String
+  name            String
+  balance         Float
+  priceUsd        Float
+  valueUsd        Float
+  change24h       Float         @default(0.0)
+  icon            String        @default("🪙")
+  allocationPct   Float         @default(0.0)
+
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TrustScore {
+  id                    String              @id @default(uuid())
+  userId                String              @unique
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score                 Int                 @default(842)
+  ratingTier            String              @default("Excellent")
+  paymentReliability    Int                 @default(92)
+  walletActivity        Int                 @default(84)
+  financialConsistency  Int                 @default(88)
+  circleReputation      Int                 @default(79)
+  assetStability        Int                 @default(86)
+  maxCreditLine         Float               @default(8500.0)
+  updatedAt             DateTime            @updatedAt
+}
+
+model TrustCircle {
+  id                    String              @id @default(uuid())
+  name                  String
+  description           String
+  category              String
+  circleTrustScore      Int                 @default(90)
+  totalCapitalPooled    Float               @default(0.0)
+  activeLoansCount      Int                 @default(0)
+  historicalRepaymentPct Float              @default(98.0)
+  createdAt             DateTime            @default(now())
+
+  members               TrustCircleMember[]
+  loans                 Loan[]
+}
+
+model TrustCircleMember {
+  id                    String              @id @default(uuid())
+  circleId              String
+  circle                TrustCircle         @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                  String              @default("MEMBER")
+  stakedContribution    Float               @default(0.0)
+  joinedAt              DateTime            @default(now())
+}
+
+model Loan {
+  id                    String              @id @default(uuid())
+  borrowerId            String
+  borrower              User                @relation(fields: [borrowerId], references: [id])
+  circleId              String?
+  circle                TrustCircle?        @relation(fields: [circleId], references: [id])
+  principalAmount       Float
+  borrowedAsset         String              @default("USDC")
+  interestRateApr       Float
+  durationDays          Int
+  collateralRatio       Float               @default(0.0)
+  collateralAmount      Float               @default(0.0)
+  collateralAsset       String?
+  status                LoanStatus          @default(ACTIVE)
+  purpose               String
+  amountRepaid          Float               @default(0.0)
+  totalDue              Float
+  dueDate               DateTime
+  createdAt             DateTime            @default(now())
+
+  repayments            LoanRepayment[]
+}
+
+model LoanRepayment {
+  id                    String              @id @default(uuid())
+  loanId                String
+  loan                  Loan                @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User                @relation(fields: [userId], references: [id])
+  amount                Float
+  asset                 String              @default("USDC")
+  txHash                String?
+  paidAt                DateTime            @default(now())
+}
+
+model Transaction {
+  id                    String              @id @default(uuid())
+  userId                String
+  user                  User                @relation(fields: [userId], references: [id])
+  type                  TransactionType
+  title                 String
+  asset                 String
+  amount                Float
+  valueUsd              Float
+  status                TransactionStatus   @default(COMPLETED)
+  txHash                String
+  fromAddress           String
+  toAddress             String
+  network               String
+  gasFeeUsd             Float
+  createdAt             DateTime            @default(now())
+}
